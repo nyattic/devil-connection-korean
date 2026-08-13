@@ -8,7 +8,7 @@ use dc_installer::{
 };
 
 #[derive(Parser)]
-#[command(name = "dc-patcher", about = "데빌 커넥션 한글패치 설치기", version)]
+#[command(name = "dc-patcher", about = "데빌 커넥션 한글패치 프로그램", version)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

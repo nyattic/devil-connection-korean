@@ -387,7 +387,7 @@ impl InstallerApp {
         ui.add_space(7.0);
         ui.label(
             RichText::new(format!(
-                "설치기에 포함되어 있습니다 · 폴더 {}개 · {}MB",
+                "패치 프로그램에 포함되어 있습니다 · 폴더 {}개 · {}MB",
                 PATCH_DIRS.len(),
                 bytes / (1024 * 1024)
             ))
