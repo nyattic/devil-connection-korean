@@ -1,0 +1,12 @@
+Font Name: MapleStory Font
+
+Copyright © NEXON Korea Corporation. All Rights Reserved.
+
+This software distribution includes the MapleStory font.
+All intellectual property rights in the font belong to NEXON Korea Corporation.
+
+The font is distributed free of charge by the copyright holder.
+Use and redistribution must comply with the official font usage policy provided by NEXON.
+
+Official distribution source:
+https://maplestory.nexon.com/Media/Font

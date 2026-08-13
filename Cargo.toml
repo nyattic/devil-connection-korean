@@ -1,0 +1,49 @@
+[package]
+name = "devil-connection-korean"
+description = "데빌 커넥션 한글패치 설치기"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+exclude = ["data", "tyrano", "THIRD_PARTY_LICENSES"]
+
+[[bin]]
+name = "dc-patcher-gui"
+path = "src/main.rs"
+
+[dependencies]
+dc-installer = { path = "crates/dc-installer" }
+
+eframe = { workspace = true, features = ["default_fonts", "glow", "wayland", "x11"] }
+egui.workspace = true
+rfd.workspace = true
+
+[workspace]
+members = ["crates/dc-asar", "crates/dc-installer"]
+default-members = [".", "crates/dc-asar", "crates/dc-installer"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "CC-BY-NC-SA-4.0"
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+eframe = { version = "0.36.1", default-features = false }
+egui = "0.36.1"
+fs4 = "1.1.0"
+rfd = "0.17.2"
+hex = "0.4.3"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+thiserror = "2.0.20"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+panic = "abort"
