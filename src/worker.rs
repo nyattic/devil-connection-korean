@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use dc_installer::{install, restore, Event, InstallConfig, InstallReport, Reporter};
+use dc_installer::{Event, InstallConfig, InstallReport, Reporter, install, restore};
 
 pub enum Job {
     Install(InstallConfig),

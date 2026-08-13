@@ -1,8 +1,8 @@
 # 개발 안내
 
-`PRIVATE_DISTRIBUTION_PLAN.md`의 **1단계: 기술 검증용 프로토타입** 구현이다.
-기존 `main.py` + 파이썬 `asar` 패키지가 하던 일을 Rust로 옮기고, 계획서 2.2절이 지적한
-설치 안전성 문제를 해결했다.
+기존 `main.py` + 파이썬 `asar` 패키지가 하던 일을 Rust로 옮기고, 파이썬 설치기가 안고
+있던 설치 안전성 문제를 해결했다. 배포용 빌드는 번역 데이터를 실행 파일 안에 포함하므로
+사용자가 받는 것은 파일 하나다.
 
 ## 구성
 
@@ -11,6 +11,8 @@
 | `src/` | `devil-connection-korean` 루트 패키지. `dc-patcher-gui` 그래픽 설치기 (egui) |
 | `crates/dc-asar` | Electron ASAR 아카이브 읽기/쓰기 |
 | `crates/dc-installer` | 게임 경로 탐색, 트랜잭션 설치, `dc-patcher` CLI |
+| `build.rs` | `embed-data` 기능을 켜면 번역 데이터를 아카이브로 묶어 `OUT_DIR`에 둔다 |
+| `src/embedded.rs` | 그 아카이브를 `include_bytes!`로 실행 파일에 싣는다 |
 | `assets/` | 설치기 화면에 쓰는 Pretendard JP 서체 |
 | `data/`, `tyrano/` | 게임에 덮어쓸 번역 데이터 |
 
@@ -20,7 +22,11 @@
 ## 사용법
 
 ```sh
+# 개발용. 번역 데이터를 포함하지 않으므로 빌드가 빠르다.
 cargo build --release
+
+# 배포용. 번역 데이터를 실행 파일에 포함한다.
+cargo build --release --features embed-data
 
 # 그래픽 설치기
 ./target/release/dc-patcher-gui
@@ -43,8 +49,8 @@ Windows에서는 드라이브 문자 추정에 더해 `libraryfolders.vdf`에 �
 
 ## 기존 파이썬 설치기와 달라진 점
 
-계획서 2.2절의 *"기존 코드는 새 `app.asar` 생성 전에 원본을 제거하므로, 재압축 실패 시
-게임 파일이 불완전해질 수 있다"*에 대응한다.
+파이썬 설치기는 새 `app.asar`을 만들기 전에 원본을 지웠기 때문에, 재압축이 실패하면
+게임 파일이 불완전한 상태로 남았다. 그 문제에 대응한다.
 
 | 항목 | 파이썬 설치기 | Rust 설치기 |
 | --- | --- | --- |
@@ -89,10 +95,15 @@ app.asar.backup.unpacked/ 위 폴더의 원본
 ## 검증
 
 ```sh
-cargo test        # 49개 (단위 + 통합)
+cargo test                                    # 50개 (단위 + 통합)
 cargo clippy --all-targets
+cargo clippy --all-targets --features embed-data
 cargo fmt --all -- --check
 ```
+
+번역 데이터 출처는 `TranslationSource`로 나뉜다. `Directory`는 `data/`, `tyrano/`를
+담은 폴더를, `Embedded`는 실행 파일에 포함된 아카이브를 읽는다. 두 경로가 같은 결과를
+내는지는 통합 테스트에서 생성된 `app.asar`을 바이트 단위로 비교해 확인한다.
 
 Node.js `@electron/asar`와의 호환성은 다음을 확인했다.
 
@@ -112,15 +123,13 @@ cargo run -p dc-asar --example asar_tool -- extract <입력.asar> <폴더>
 cargo run -p dc-asar --example asar_tool -- list <입력.asar>
 ```
 
-## 아직 구현하지 않은 것
+## 남은 작업
 
-계획서 2~8단계에 해당한다.
+- 패치된 게임을 실제로 실행해 확인. 지금까지 확인한 것은 복구 후 원본과 바이트 단위로
+  일치한다는 점까지다.
+- Windows에서의 설치 흐름 확인. 개발과 검증은 macOS에서만 했다.
+- 3개 플랫폼 빌드와 릴리스 자동화. `.github/` 자체가 아직 없다.
+- 배포 패키징. Windows 아이콘, macOS 앱 번들과 공증.
 
-- 개인화 패키지 빌더, 라이선스/패키지 형식, 서명·암호화 (`dc-core`)
-- NAS 활성화 API와 관리자 CLI
-- 기기 키 생성 및 OS 보안 저장소 보관
-- 등록·인증·다운로드 흐름
-- 플랫폼별 배포 패키징(코드 서명, macOS 앱 번들, Windows 아이콘)
-
-현재 설치기는 `--data-dir`의 평문 번역 데이터를 그대로 읽는다.
-계획서 4장(권리·라이선스 확정)이 정리되기 전까지 기기 귀속형 배포는 운영에 투입하지 않는다.
+`dc-patcher` CLI는 번역 데이터를 포함하지 않는다. 실행 파일 두 개에 같은 137MB를
+중복해서 넣을 이유가 없어서다. CLI로 설치할 때는 `--data-dir`로 폴더를 지정한다.

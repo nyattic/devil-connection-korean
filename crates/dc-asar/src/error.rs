@@ -26,7 +26,9 @@ pub enum AsarError {
     #[error("아카이브에 없는 항목입니다: {0}")]
     NotFound(String),
 
-    #[error("아카이브 항목 '{path}'의 크기가 맞지 않습니다 (기대 {expected}바이트, 실제 {actual}바이트)")]
+    #[error(
+        "아카이브 항목 '{path}'의 크기가 맞지 않습니다 (기대 {expected}바이트, 실제 {actual}바이트)"
+    )]
     SizeMismatch {
         path: String,
         expected: u64,

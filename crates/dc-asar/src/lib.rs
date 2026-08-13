@@ -6,9 +6,9 @@ mod safepath;
 mod write;
 
 pub use error::{AsarError, Result};
-pub use header::{flatten, Entry, EntryKind, Integrity, Node, INTEGRITY_BLOCK_SIZE};
-pub use read::{unpacked_dir_for, AsarArchive, ExtractStats};
-pub use write::{create_archive, PackOptions, PackStats};
+pub use header::{Entry, EntryKind, INTEGRITY_BLOCK_SIZE, Integrity, Node, flatten};
+pub use read::{AsarArchive, ExtractStats, unpacked_dir_for};
+pub use write::{ArchiveRoot, PackOptions, PackStats, create_archive, create_archive_from};
 
 pub fn looks_like_asar(bytes: &[u8]) -> bool {
     if bytes.len() < 16 {

@@ -544,6 +544,7 @@ dependencies = [
 name = "devil-connection-korean"
 version = "0.1.0"
 dependencies = [
+ "dc-asar",
  "dc-installer",
  "eframe",
  "egui",

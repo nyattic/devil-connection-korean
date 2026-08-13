@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 
-use dc_installer::{detect_game_dirs, locate_asar, Event, InstallConfig, Level, PATCH_DIRS, STEPS};
-use egui::{vec2, Align, Color32, CornerRadius, Layout, Rect, RichText, ScrollArea, Sense, Stroke};
+use dc_installer::{
+    Event, InstallConfig, Level, PATCH_DIRS, STEPS, TranslationSource, detect_game_dirs,
+    locate_asar,
+};
+use egui::{Align, Color32, CornerRadius, Layout, Rect, RichText, ScrollArea, Sense, Stroke, vec2};
 
 use crate::theme;
 use crate::worker::{self, Job, Msg, Outcome};
@@ -30,6 +33,7 @@ struct Notice {
 }
 
 pub struct InstallerApp {
+    embedded: Option<&'static [u8]>,
     game_path: String,
     data_path: String,
     game_hint: Hint,
@@ -51,6 +55,7 @@ impl InstallerApp {
         theme::install_style(&cc.egui_ctx);
 
         let mut app = InstallerApp {
+            embedded: crate::embedded::translation(),
             game_path: String::new(),
             data_path: String::new(),
             game_hint: Hint::None,
@@ -64,7 +69,9 @@ impl InstallerApp {
             notice: None,
         };
 
-        if let Some(dir) = dc_installer::find_data_dir() {
+        if app.embedded.is_none()
+            && let Some(dir) = dc_installer::find_data_dir()
+        {
             app.data_path = dir.display().to_string();
         }
         app.autodetect_game(false);
@@ -119,7 +126,15 @@ impl InstallerApp {
     }
 
     fn ready(&self) -> bool {
-        matches!(self.game_hint, Hint::Ok(_)) && matches!(self.data_hint, Hint::Ok(_))
+        matches!(self.game_hint, Hint::Ok(_))
+            && (self.embedded.is_some() || matches!(self.data_hint, Hint::Ok(_)))
+    }
+
+    fn source(&self) -> TranslationSource {
+        match self.embedded {
+            Some(bytes) => TranslationSource::Embedded(bytes),
+            None => TranslationSource::Directory(PathBuf::from(self.data_path.trim())),
+        }
     }
 
     fn status(&self) -> (String, Color32) {
@@ -140,6 +155,9 @@ impl InstallerApp {
                 theme::ERROR,
             ),
             Phase::Idle if self.ready() => ("설치할 준비가 됐습니다".to_string(), theme::MUTED),
+            Phase::Idle if self.embedded.is_some() => {
+                ("게임 폴더를 확인해주세요".to_string(), theme::MUTED)
+            }
             Phase::Idle => (
                 "게임 폴더와 번역 데이터를 확인해주세요".to_string(),
                 theme::MUTED,
@@ -169,7 +187,7 @@ impl InstallerApp {
         self.rx = Some(worker::spawn(
             Job::Install(InstallConfig {
                 asar_path: asar,
-                data_dir: PathBuf::from(self.data_path.trim()),
+                source: self.source(),
                 integrity: false,
                 keep_work_dir: false,
             }),
@@ -308,22 +326,25 @@ impl InstallerApp {
         self.title(ui);
         ui.add_space(26.0);
 
-        if self.field(ui, "게임 폴더", true) {
-            if let Some(dir) = rfd::FileDialog::new()
+        if self.field(ui, "게임 폴더", true)
+            && let Some(dir) = rfd::FileDialog::new()
                 .set_title("게임이 설치된 폴더를 선택하세요")
                 .pick_folder()
-            {
-                self.game_path = dir.display().to_string();
-            }
+        {
+            self.game_path = dir.display().to_string();
         }
 
         ui.add_space(16.0);
-        if self.field(ui, "번역 데이터", false) {
-            if let Some(dir) = rfd::FileDialog::new()
-                .set_title("번역 데이터 폴더를 선택하세요")
-                .pick_folder()
-            {
-                self.data_path = dir.display().to_string();
+        match self.embedded {
+            Some(bytes) => self.bundled_data(ui, bytes.len()),
+            None => {
+                if self.field(ui, "번역 데이터", false)
+                    && let Some(dir) = rfd::FileDialog::new()
+                        .set_title("번역 데이터 폴더를 선택하세요")
+                        .pick_folder()
+                {
+                    self.data_path = dir.display().to_string();
+                }
             }
         }
 
@@ -338,7 +359,7 @@ impl InstallerApp {
 
         ui.add_space(12.0);
         ui.label(
-            RichText::new("제작 Nyabi · 적용 Oatone · 번역 체퓨 · 이미지 토니, 체퓨 · 영상 민버드")
+            RichText::new("제작 Nyabi · 적용 Oatone · 번역 체퓨 · 이미지 토니 · 영상 민버드")
                 .font(theme::regular(11.0))
                 .color(theme::FAINT),
         );
@@ -355,6 +376,24 @@ impl InstallerApp {
             RichText::new("でびるコネクショん")
                 .font(theme::regular(12.5))
                 .color(theme::FAINT),
+        );
+    }
+
+    fn bundled_data(&self, ui: &mut egui::Ui, bytes: usize) {
+        ui.label(
+            RichText::new("번역 데이터")
+                .font(theme::semibold(12.5))
+                .color(theme::TEXT),
+        );
+        ui.add_space(7.0);
+        ui.label(
+            RichText::new(format!(
+                "설치기에 포함되어 있습니다 · 폴더 {}개 · {}MB",
+                PATCH_DIRS.len(),
+                bytes / (1024 * 1024)
+            ))
+            .font(theme::regular(11.5))
+            .color(theme::SUCCESS),
         );
     }
 

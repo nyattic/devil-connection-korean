@@ -1,6 +1,6 @@
 [package]
 name = "devil-connection-korean"
-description = "데빌 커넥션 한글패치 설치기"
+description = "데빌 커넥션 한글패치 프로그램"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,12 @@ exclude = ["data", "tyrano", "THIRD_PARTY_LICENSES"]
 [[bin]]
 name = "dc-patcher-gui"
 path = "src/main.rs"
+
+[features]
+embed-data = []
+
+[build-dependencies]
+dc-asar = { path = "crates/dc-asar" }
 
 [dependencies]
 dc-installer = { path = "crates/dc-installer" }
@@ -24,9 +30,9 @@ default-members = [".", "crates/dc-asar", "crates/dc-installer"]
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.85"
-license = "CC-BY-NC-SA-4.0"
+edition = "2024"
+rust-version = "1.97"
+license = "LicenseRef-All-Rights-Reserved"
 
 [workspace.dependencies]
 anyhow = "1.0.104"

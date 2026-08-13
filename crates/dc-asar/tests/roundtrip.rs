@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use dc_asar::{create_archive, AsarArchive, EntryKind, PackOptions};
+use dc_asar::{AsarArchive, EntryKind, PackOptions, create_archive};
 
 const VIDEO_LEN: usize = 5 * 1024 * 1024 + 7;
 
@@ -35,9 +35,11 @@ fn pack_then_extract_reproduces_source_tree() {
     let stats = create_archive(&src, &archive, &PackOptions::default()).unwrap();
 
     assert_eq!(stats.unpacked_files, 1);
-    assert!(dc_asar::unpacked_dir_for(&archive)
-        .join("bin/native.node")
-        .exists());
+    assert!(
+        dc_asar::unpacked_dir_for(&archive)
+            .join("bin/native.node")
+            .exists()
+    );
 
     let mut opened = AsarArchive::open(&archive).unwrap();
     opened.validate().unwrap();

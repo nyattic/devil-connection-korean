@@ -3,7 +3,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use dc_installer::{
-    detect_game_dirs, game, install, locate_asar, restore, Event, InstallConfig, Level, Reporter,
+    Event, InstallConfig, Level, Reporter, TranslationSource, detect_game_dirs, game, install,
+    locate_asar, restore,
 };
 
 #[derive(Parser)]
@@ -162,7 +163,7 @@ fn run(cli: Cli) -> std::result::Result<(), Box<dyn std::error::Error>> {
                     return Err(
                         "번역 데이터 폴더를 찾지 못했습니다. --data-dir로 직접 지정해주세요."
                             .into(),
-                    )
+                    );
                 }
             };
 
@@ -172,7 +173,7 @@ fn run(cli: Cli) -> std::result::Result<(), Box<dyn std::error::Error>> {
             let report = install(
                 &InstallConfig {
                     asar_path: asar,
-                    data_dir,
+                    source: TranslationSource::Directory(data_dir),
                     integrity,
                     keep_work_dir,
                 },

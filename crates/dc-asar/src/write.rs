@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::error::{AsarError, Result};
-use crate::header::{self, Integrity, Node, INTEGRITY_BLOCK_SIZE};
+use crate::header::{self, INTEGRITY_BLOCK_SIZE, Integrity, Node};
 use crate::pattern;
 use crate::read::unpacked_dir_for;
 use crate::safepath;
@@ -52,16 +52,45 @@ enum SourceKind {
     File { size: u64, executable: bool },
 }
 
+pub struct ArchiveRoot<'a> {
+    pub archive_path: &'a str,
+    pub source: &'a Path,
+}
+
 pub fn create_archive(
     src_dir: impl AsRef<Path>,
     dest: impl AsRef<Path>,
     options: &PackOptions,
 ) -> Result<PackStats> {
-    let src_dir = src_dir.as_ref();
+    create_archive_from(
+        &[ArchiveRoot {
+            archive_path: "",
+            source: src_dir.as_ref(),
+        }],
+        dest,
+        options,
+    )
+}
+
+pub fn create_archive_from(
+    roots: &[ArchiveRoot],
+    dest: impl AsRef<Path>,
+    options: &PackOptions,
+) -> Result<PackStats> {
     let dest = dest.as_ref();
 
     let mut entries = Vec::new();
-    collect(src_dir, "", &mut entries)?;
+    for root in roots {
+        if !root.archive_path.is_empty() {
+            safepath::check_rel_path(root.archive_path)?;
+            entries.push(SourceEntry {
+                rel_path: root.archive_path.to_string(),
+                source: root.source.to_path_buf(),
+                kind: SourceKind::Directory,
+            });
+        }
+        collect(root.source, root.archive_path, &mut entries)?;
+    }
     entries.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
 
     let unpacked_dir = unpacked_dir_for(dest);

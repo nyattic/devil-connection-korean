@@ -1,8 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dc_asar::{create_archive, AsarArchive, PackOptions};
-use dc_installer::{install, restore, InstallConfig, InstallError, SilentReporter, PATCH_DIRS};
+use dc_asar::{ArchiveRoot, AsarArchive, PackOptions, create_archive, create_archive_from};
+use dc_installer::{
+    InstallConfig, InstallError, PATCH_DIRS, SilentReporter, TranslationSource, install, restore,
+};
 
 struct Fixture {
     _tmp: tempfile::TempDir,
@@ -66,7 +68,38 @@ impl Fixture {
     fn config(&self) -> InstallConfig {
         InstallConfig {
             asar_path: self.asar.clone(),
-            data_dir: self.data_dir.clone(),
+            source: TranslationSource::Directory(self.data_dir.clone()),
+            integrity: false,
+            keep_work_dir: false,
+        }
+    }
+
+    fn embedded_config(&self, roots: &[&str]) -> InstallConfig {
+        let packed = self._tmp.path().join("translation.asar");
+        let sources: Vec<PathBuf> = roots.iter().map(|name| self.data_dir.join(name)).collect();
+        let entries: Vec<ArchiveRoot> = roots
+            .iter()
+            .zip(&sources)
+            .map(|(name, source)| ArchiveRoot {
+                archive_path: name,
+                source,
+            })
+            .collect();
+
+        create_archive_from(
+            &entries,
+            &packed,
+            &PackOptions {
+                unpack: Vec::new(),
+                integrity: false,
+            },
+        )
+        .unwrap();
+
+        let bytes: &'static [u8] = Box::leak(fs::read(&packed).unwrap().into_boxed_slice());
+        InstallConfig {
+            asar_path: self.asar.clone(),
+            source: TranslationSource::Embedded(bytes),
             integrity: false,
             keep_work_dir: false,
         }
@@ -138,11 +171,12 @@ fn install_applies_translation_and_keeps_untouched_files() {
         b"var m={};"
     );
 
-    assert!(fx
-        .asar
-        .with_file_name("app.asar.unpacked")
-        .join("bin/native.node")
-        .is_file());
+    assert!(
+        fx.asar
+            .with_file_name("app.asar.unpacked")
+            .join("bin/native.node")
+            .is_file()
+    );
 
     assert_eq!(report.verified_files, 4);
     assert!(fx.backup().is_file());
@@ -289,4 +323,49 @@ fn keep_work_dir_leaves_the_working_copy_behind() {
 
     assert_eq!(work_dirs.len(), 1, "작업 폴더가 남아야 합니다");
     assert!(work_dirs[0].join("app/index.html").is_file());
+}
+
+#[test]
+fn embedded_archive_produces_the_same_result_as_a_data_folder() {
+    let expected = {
+        let fx = Fixture::new();
+        install(&fx.config(), &SilentReporter).unwrap();
+        fs::read(&fx.asar).unwrap()
+    };
+
+    let fx = Fixture::new();
+    let report = install(&fx.embedded_config(&["data", "tyrano"]), &SilentReporter).unwrap();
+
+    assert_eq!(
+        fs::read(&fx.asar).unwrap(),
+        expected,
+        "임베드 설치 결과가 폴더 설치와 다릅니다"
+    );
+    assert_eq!(report.verified_files, 4);
+    assert_eq!(
+        fx.read_from_archive("data/scenario/first.ks"),
+        "번역된 시나리오".as_bytes()
+    );
+    assert_eq!(
+        fx.read_from_archive("data/scenario/keep.ks"),
+        "건드리지 않음".as_bytes()
+    );
+    assert_eq!(fx.read_from_archive("index.html"), b"<html>original</html>");
+    assert_eq!(fs::read(fx.backup()).unwrap(), fx.pristine);
+    assert_no_work_dirs(&fx.resources());
+}
+
+#[test]
+fn incomplete_embedded_archive_fails_before_touching_the_game() {
+    let fx = Fixture::new();
+
+    let err = install(&fx.embedded_config(&["data"]), &SilentReporter).unwrap_err();
+    let InstallError::DataDirIncomplete(missing) = &err else {
+        panic!("예상과 다른 오류: {err}");
+    };
+    assert!(missing.contains("tyrano"));
+
+    assert_eq!(fs::read(&fx.asar).unwrap(), fx.pristine);
+    assert!(!fx.backup().exists());
+    assert_no_work_dirs(&fx.resources());
 }

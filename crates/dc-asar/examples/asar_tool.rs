@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use dc_asar::{create_archive, AsarArchive, EntryKind, PackOptions};
+use dc_asar::{AsarArchive, EntryKind, PackOptions, create_archive};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -19,7 +19,9 @@ pub enum InstallError {
     #[error("'{0}'에 쓰기 권한이 없습니다. 게임을 종료하고 관리자 권한으로 다시 실행해보세요.")]
     NotWritable(PathBuf),
 
-    #[error("디스크 공간이 부족합니다. 최소 {required_mb}MB가 필요하지만 {available_mb}MB만 남아 있습니다.")]
+    #[error(
+        "디스크 공간이 부족합니다. 최소 {required_mb}MB가 필요하지만 {available_mb}MB만 남아 있습니다."
+    )]
     NotEnoughSpace { required_mb: u64, available_mb: u64 },
 
     #[error("입출력 오류 ({path}): {source}")]
@@ -38,7 +40,9 @@ pub enum InstallError {
     #[error("설치에 실패해 원본을 복구했습니다. 원인: {0}")]
     RolledBack(String),
 
-    #[error("설치에 실패했고 원본 복구도 실패했습니다. 원인: {cause} / 복구 실패: {rollback}. '{backup}' 파일을 'app.asar'로 직접 되돌려주세요.")]
+    #[error(
+        "설치에 실패했고 원본 복구도 실패했습니다. 원인: {cause} / 복구 실패: {rollback}. '{backup}' 파일을 'app.asar'로 직접 되돌려주세요."
+    )]
     RollbackFailed {
         cause: String,
         rollback: String,

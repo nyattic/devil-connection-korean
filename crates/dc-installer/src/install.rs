@@ -1,12 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dc_asar::{create_archive, unpacked_dir_for, AsarArchive, PackOptions};
+use dc_asar::{AsarArchive, EntryKind, PackOptions, create_archive, unpacked_dir_for};
 use sha2::{Digest, Sha256};
 
 use crate::error::{InstallError, Result};
 use crate::fsutil::{self, CopyStats};
-use crate::progress::{info, success, warn, Event, Reporter};
+use crate::progress::{Event, Reporter, info, success, warn};
 
 pub const PATCH_DIRS: &[&str] = &[
     "data/scenario",
@@ -65,9 +65,15 @@ pub const STEPS: &[StepInfo] = &[
 ];
 
 #[derive(Debug, Clone)]
+pub enum TranslationSource {
+    Directory(PathBuf),
+    Embedded(&'static [u8]),
+}
+
+#[derive(Debug, Clone)]
 pub struct InstallConfig {
     pub asar_path: PathBuf,
-    pub data_dir: PathBuf,
+    pub source: TranslationSource,
     pub integrity: bool,
     pub keep_work_dir: bool,
 }
@@ -84,7 +90,7 @@ pub struct InstallReport {
 
 struct CopiedFile {
     archive_path: String,
-    source: PathBuf,
+    expected: [u8; 32],
 }
 
 struct Paths {
@@ -176,7 +182,7 @@ fn run_install(
     );
 
     step(reporter, 4);
-    let (copy_stats, copied) = apply_translation(&config.data_dir, &paths.app, reporter)?;
+    let (copy_stats, copied) = apply_translation(&config.source, &paths.app, reporter)?;
     success(
         reporter,
         format!(
@@ -251,7 +257,7 @@ fn preflight(config: &InstallConfig, reporter: &dyn Reporter) -> Result<Prefligh
 
     info(reporter, format!("대상: {}", asar.display()));
 
-    check_data_dir(&config.data_dir)?;
+    let data_size = check_source(&config.source)?;
     fsutil::check_writable(&resources)?;
 
     let archive = AsarArchive::open(asar)?;
@@ -261,10 +267,6 @@ fn preflight(config: &InstallConfig, reporter: &dyn Reporter) -> Result<Prefligh
     let archive_size = fs::metadata(asar)
         .map_err(|e| InstallError::io(asar, e))?
         .len();
-    let mut data_size = 0u64;
-    for dir in PATCH_DIRS {
-        data_size += fsutil::dir_size(&config.data_dir.join(dir))?;
-    }
 
     let backup_exists = with_suffix(asar, ".backup").is_file();
     let required = archive_size * if backup_exists { 2 } else { 3 } + data_size * 2 + SPACE_MARGIN;
@@ -292,11 +294,11 @@ fn preflight(config: &InstallConfig, reporter: &dyn Reporter) -> Result<Prefligh
 pub fn find_data_dir() -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.extend(dir.ancestors().take(5).map(Path::to_path_buf));
-            candidates.push(dir.join("../Resources"));
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        candidates.extend(dir.ancestors().take(5).map(Path::to_path_buf));
+        candidates.push(dir.join("../Resources"));
     }
     if let Ok(cwd) = std::env::current_dir() {
         candidates.extend(cwd.ancestors().take(3).map(Path::to_path_buf));
@@ -325,6 +327,41 @@ fn check_data_dir(data_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn check_source(source: &TranslationSource) -> Result<u64> {
+    match source {
+        TranslationSource::Directory(dir) => {
+            check_data_dir(dir)?;
+            let mut total = 0u64;
+            for patch_dir in PATCH_DIRS {
+                total += fsutil::dir_size(&dir.join(patch_dir))?;
+            }
+            Ok(total)
+        }
+        TranslationSource::Embedded(bytes) => {
+            let archive = AsarArchive::from_bytes(bytes)?;
+            archive.validate()?;
+
+            let directories: Vec<String> = archive
+                .entries()
+                .into_iter()
+                .filter(|entry| matches!(entry.kind, dc_asar::EntryKind::Directory))
+                .map(|entry| entry.path)
+                .collect();
+            let missing: Vec<&str> = PATCH_DIRS
+                .iter()
+                .copied()
+                .filter(|dir| !directories.iter().any(|found| found == dir))
+                .collect();
+
+            if !missing.is_empty() {
+                return Err(InstallError::DataDirIncomplete(missing.join(", ")));
+            }
+
+            Ok(bytes.len() as u64)
+        }
+    }
+}
+
 fn ensure_backup(paths: &Paths, reporter: &dyn Reporter) -> Result<()> {
     if paths.backup.is_file() {
         info(reporter, "기존 백업을 그대로 사용합니다");
@@ -348,6 +385,58 @@ fn ensure_backup(paths: &Paths, reporter: &dyn Reporter) -> Result<()> {
 }
 
 fn apply_translation(
+    source: &TranslationSource,
+    app_dir: &Path,
+    reporter: &dyn Reporter,
+) -> Result<(CopyStats, Vec<CopiedFile>)> {
+    match source {
+        TranslationSource::Directory(dir) => apply_from_dir(dir, app_dir, reporter),
+        TranslationSource::Embedded(bytes) => apply_from_archive(bytes, app_dir, reporter),
+    }
+}
+
+fn apply_from_archive(
+    bytes: &[u8],
+    app_dir: &Path,
+    reporter: &dyn Reporter,
+) -> Result<(CopyStats, Vec<CopiedFile>)> {
+    let mut archive = AsarArchive::from_bytes(bytes)?;
+    archive.validate()?;
+    let extracted = archive.extract_to(app_dir)?;
+
+    let paths: Vec<String> = archive
+        .entries()
+        .into_iter()
+        .filter(|entry| matches!(entry.kind, EntryKind::File { .. }))
+        .map(|entry| entry.path)
+        .collect();
+
+    let total = paths.len() as u64;
+    let mut copied = Vec::with_capacity(paths.len());
+    for (index, archive_path) in paths.into_iter().enumerate() {
+        let expected = archive.hash_file(&archive_path)?;
+        copied.push(CopiedFile {
+            archive_path,
+            expected,
+        });
+
+        if index % 100 == 0 || index as u64 + 1 == total {
+            reporter.report(Event::Progress {
+                label: "번역 데이터 확인".to_string(),
+                done: index as u64 + 1,
+                total,
+            });
+        }
+    }
+
+    let stats = CopyStats {
+        files: extracted.files,
+        bytes: extracted.bytes,
+    };
+    Ok((stats, copied))
+}
+
+fn apply_from_dir(
     data_dir: &Path,
     app_dir: &Path,
     reporter: &dyn Reporter,
@@ -389,7 +478,7 @@ fn collect_files(src: &Path, prefix: &str, out: &mut Vec<CopiedFile>) -> Result<
         } else if metadata.is_file() {
             out.push(CopiedFile {
                 archive_path: rel,
-                source: path,
+                expected: hash_file(&path)?,
             });
         }
     }
@@ -415,12 +504,11 @@ fn verify(
 
     let total = copied.len() as u64;
     for (index, file) in copied.iter().enumerate() {
-        let expected = hash_file(&file.source)?;
         let actual = archive.hash_file(&file.archive_path).map_err(|e| {
             InstallError::Verification(format!("'{}' 확인 실패: {e}", file.archive_path))
         })?;
 
-        if expected != actual {
+        if file.expected != actual {
             return Err(InstallError::Verification(format!(
                 "'{}'의 내용이 원본 번역 파일과 다릅니다",
                 file.archive_path

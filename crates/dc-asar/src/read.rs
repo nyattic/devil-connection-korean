@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -21,16 +21,16 @@ pub struct ExtractStats {
     pub bytes: u64,
 }
 
-pub struct AsarArchive {
+pub struct AsarArchive<R = BufReader<File>> {
     path: PathBuf,
     unpacked_dir: PathBuf,
     root: Node,
     data_offset: u64,
     archive_len: u64,
-    reader: BufReader<File>,
+    reader: R,
 }
 
-impl AsarArchive {
+impl AsarArchive<BufReader<File>> {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let file = File::open(&path).map_err(|e| AsarError::io(&path, e))?;
@@ -48,7 +48,35 @@ impl AsarArchive {
             reader,
         })
     }
+}
 
+impl<'a> AsarArchive<Cursor<&'a [u8]>> {
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
+        let mut reader = Cursor::new(bytes);
+        let (root, data_offset) = header::read(&mut reader)?;
+
+        if let Some(entry) = header::flatten(&root)
+            .into_iter()
+            .find(|entry| matches!(entry.kind, EntryKind::File { unpacked: true, .. }))
+        {
+            return Err(AsarError::UnsupportedEntry(format!(
+                "{} (메모리 아카이브에는 unpacked 항목을 담을 수 없습니다)",
+                entry.path
+            )));
+        }
+
+        Ok(AsarArchive {
+            path: PathBuf::new(),
+            unpacked_dir: PathBuf::new(),
+            root,
+            data_offset,
+            archive_len: bytes.len() as u64,
+            reader,
+        })
+    }
+}
+
+impl<R: Read + Seek> AsarArchive<R> {
     pub fn path(&self) -> &Path {
         &self.path
     }
