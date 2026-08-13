@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: DevilConnection-Patcher-Linux-x86_64
+          - os: windows-latest
+            asset: DevilConnection-Patcher-Windows-x64.exe
+          - os: macos-latest
+            asset: DevilConnection-Patcher-macOS-arm64.zip
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libxkbcommon-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Build with embedded translation data
+        run: cargo build --release --locked --features embed-data
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          case "$RUNNER_OS" in
+            Windows)
+              cp target/release/dc-patcher-gui.exe "dist/${{ matrix.asset }}"
+              ;;
+            macOS)
+              cp target/release/dc-patcher-gui DevilConnection-Patcher
+              zip -j "dist/${{ matrix.asset }}" DevilConnection-Patcher
+              ;;
+            Linux)
+              cp target/release/dc-patcher-gui "dist/${{ matrix.asset }}"
+              chmod +x "dist/${{ matrix.asset }}"
+              ;;
+          esac
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
