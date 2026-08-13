@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -16,14 +16,14 @@ const COPY_CHUNK: usize = 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct PackOptions {
     pub unpack: Vec<String>,
-    pub integrity: bool,
+    pub preserve_unpacked: BTreeSet<String>,
 }
 
 impl Default for PackOptions {
     fn default() -> Self {
         PackOptions {
             unpack: vec!["*.node".to_string()],
-            integrity: false,
+            preserve_unpacked: BTreeSet::new(),
         }
     }
 }
@@ -97,12 +97,16 @@ pub fn create_archive_from(
     let mut stats = PackStats::default();
     let mut root = Node::directory();
     let mut packed: Vec<(String, PathBuf, u64)> = Vec::new();
+    let mut unpacked_dirs: BTreeSet<String> = BTreeSet::new();
     let mut offset: u64 = 0;
 
     for entry in &entries {
         match &entry.kind {
             SourceKind::Directory => {
                 ensure_directory_node(&mut root, &entry.rel_path)?;
+                if pattern::matches_any(&options.unpack, pattern::base_name(&entry.rel_path)) {
+                    unpacked_dirs.insert(entry.rel_path.clone());
+                }
                 stats.directories += 1;
             }
             SourceKind::Link { target } => {
@@ -122,12 +126,15 @@ pub fn create_archive_from(
                 stats.links += 1;
             }
             SourceKind::File { size, executable } => {
-                let unpacked = pattern::matches_any(&options.unpack, &entry.rel_path);
-                let integrity = if options.integrity {
-                    Some(compute_integrity(&entry.source)?)
-                } else {
-                    None
-                };
+                let parent = entry
+                    .rel_path
+                    .rsplit_once('/')
+                    .map(|(dir, _)| dir)
+                    .unwrap_or("");
+                let unpacked = unpacked_dirs.contains(parent)
+                    || pattern::matches_any(&options.unpack, pattern::base_name(&entry.rel_path))
+                    || options.preserve_unpacked.contains(&entry.rel_path);
+                let integrity = Some(compute_integrity(&entry.source)?);
 
                 let node = if unpacked {
                     let target = safepath::join_checked(&unpacked_dir, &entry.rel_path)?;
@@ -331,7 +338,7 @@ fn compute_integrity(path: &Path) -> Result<Integrity> {
 #[cfg(unix)]
 fn is_executable(metadata: &fs::Metadata) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & 0o111 != 0
+    metadata.permissions().mode() & 0o100 != 0
 }
 
 #[cfg(not(unix))]

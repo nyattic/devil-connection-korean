@@ -188,7 +188,6 @@ impl InstallerApp {
             Job::Install(InstallConfig {
                 asar_path: asar,
                 source: self.source(),
-                integrity: false,
                 keep_work_dir: false,
             }),
             ctx.clone(),

@@ -33,7 +33,7 @@ fn main() {
     ];
     let options = PackOptions {
         unpack: Vec::new(),
-        integrity: false,
+        ..PackOptions::default()
     };
 
     match create_archive_from(&roots, &dest, &options) {

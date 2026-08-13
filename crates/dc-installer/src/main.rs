@@ -31,9 +31,6 @@ enum Command {
         data_dir: Option<PathBuf>,
 
         #[arg(long)]
-        integrity: bool,
-
-        #[arg(long)]
         keep_work_dir: bool,
     },
 
@@ -153,7 +150,6 @@ fn run(cli: Cli) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Command::Install {
             target,
             data_dir,
-            integrity,
             keep_work_dir,
         } => {
             let asar = target.resolve()?;
@@ -174,7 +170,6 @@ fn run(cli: Cli) -> std::result::Result<(), Box<dyn std::error::Error>> {
                 &InstallConfig {
                     asar_path: asar,
                     source: TranslationSource::Directory(data_dir),
-                    integrity,
                     keep_work_dir,
                 },
                 &ConsoleReporter,

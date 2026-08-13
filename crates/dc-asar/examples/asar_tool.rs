@@ -27,7 +27,7 @@ fn main() -> ExitCode {
 fn pack(args: &[String]) -> dc_asar::Result<()> {
     let mut options = PackOptions {
         unpack: Vec::new(),
-        integrity: false,
+        ..PackOptions::default()
     };
 
     let mut rest = args[3..].iter();
@@ -38,7 +38,6 @@ fn pack(args: &[String]) -> dc_asar::Result<()> {
                     options.unpack.push(pattern.clone());
                 }
             }
-            "--integrity" => options.integrity = true,
             other => eprintln!("알 수 없는 옵션 무시: {other}"),
         }
     }

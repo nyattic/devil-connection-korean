@@ -34,11 +34,20 @@ impl Fixture {
         write_file(&original.join("data/others/master_data.js"), b"var m={};");
         write_file(&original.join("tyrano/tyrano.css"), b"body{color:red}");
         write_file(&original.join("bin/native.node"), b"native module");
+        write_file(&original.join("bin/libsteam_api.dylib"), b"shared library");
 
         let game_dir = root.join("game");
         let asar = game_dir.join("resources/app.asar");
         fs::create_dir_all(asar.parent().unwrap()).unwrap();
-        create_archive(&original, &asar, &PackOptions::default()).unwrap();
+        create_archive(
+            &original,
+            &asar,
+            &PackOptions {
+                unpack: vec!["*.node".to_string(), "*.dylib".to_string()],
+                ..PackOptions::default()
+            },
+        )
+        .unwrap();
         let pristine = fs::read(&asar).unwrap();
 
         let data_dir = root.join("patch-data");
@@ -69,7 +78,6 @@ impl Fixture {
         InstallConfig {
             asar_path: self.asar.clone(),
             source: TranslationSource::Directory(self.data_dir.clone()),
-            integrity: false,
             keep_work_dir: false,
         }
     }
@@ -91,7 +99,7 @@ impl Fixture {
             &packed,
             &PackOptions {
                 unpack: Vec::new(),
-                integrity: false,
+                ..PackOptions::default()
             },
         )
         .unwrap();
@@ -100,7 +108,6 @@ impl Fixture {
         InstallConfig {
             asar_path: self.asar.clone(),
             source: TranslationSource::Embedded(bytes),
-            integrity: false,
             keep_work_dir: false,
         }
     }
@@ -182,6 +189,30 @@ fn install_applies_translation_and_keeps_untouched_files() {
     assert!(fx.backup().is_file());
     assert_eq!(fs::read(fx.backup()).unwrap(), fx.pristine);
     assert_no_work_dirs(&fx.resources());
+}
+
+#[test]
+fn install_keeps_every_file_the_original_had_unpacked() {
+    let fx = Fixture::new();
+    install(&fx.config(), &SilentReporter).unwrap();
+
+    let unpacked = fx.asar.with_file_name("app.asar.unpacked");
+    assert!(
+        unpacked.join("bin/libsteam_api.dylib").is_file(),
+        "패턴에 맞지 않는 원본 unpacked 파일이 사라졌습니다"
+    );
+    assert!(unpacked.join("bin/native.node").is_file());
+
+    let opened = AsarArchive::open(&fx.asar).unwrap();
+    let entries = opened.entries();
+    let dylib = entries
+        .iter()
+        .find(|e| e.path == "bin/libsteam_api.dylib")
+        .expect("dylib 항목이 없습니다");
+    assert!(
+        matches!(dylib.kind, dc_asar::EntryKind::File { unpacked: true, .. }),
+        "헤더의 unpacked 표시가 유실됐습니다"
+    );
 }
 
 #[test]

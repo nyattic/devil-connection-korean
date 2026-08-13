@@ -136,11 +136,7 @@ fn integrity_blocks_match_file_contents() {
     let archive = tmp.path().join("app.asar");
     build_source(&src);
 
-    let options = PackOptions {
-        integrity: true,
-        ..PackOptions::default()
-    };
-    create_archive(&src, &archive, &options).unwrap();
+    create_archive(&src, &archive, &PackOptions::default()).unwrap();
 
     let opened = AsarArchive::open(&archive).unwrap();
     let node = opened.root().lookup("data/video/title.mp4").unwrap();
@@ -167,6 +163,78 @@ fn integrity_blocks_match_file_contents() {
             "블록 {index}"
         );
     }
+}
+
+#[test]
+fn preserve_unpacked_keeps_files_the_pattern_would_pack() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src");
+    let archive = tmp.path().join("app.asar");
+    build_source(&src);
+    fs::write(src.join("bin/libsteam_api.dylib"), b"fake dylib").unwrap();
+
+    let options = PackOptions {
+        unpack: vec!["*.node".to_string()],
+        preserve_unpacked: ["bin/libsteam_api.dylib".to_string()].into_iter().collect(),
+    };
+    let stats = create_archive(&src, &archive, &options).unwrap();
+    assert_eq!(stats.unpacked_files, 2);
+
+    let unpacked_dir = dc_asar::unpacked_dir_for(&archive);
+    assert!(unpacked_dir.join("bin/native.node").is_file());
+    assert!(unpacked_dir.join("bin/libsteam_api.dylib").is_file());
+
+    let mut opened = AsarArchive::open(&archive).unwrap();
+    opened.validate().unwrap();
+    let dylib = opened.entries();
+    let dylib = dylib
+        .iter()
+        .find(|e| e.path == "bin/libsteam_api.dylib")
+        .unwrap();
+    assert!(matches!(dylib.kind, EntryKind::File { unpacked: true, .. }));
+    assert_eq!(
+        opened.read_file("bin/libsteam_api.dylib").unwrap(),
+        b"fake dylib"
+    );
+}
+
+#[test]
+fn an_unpacked_directory_unpacks_the_files_directly_inside_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src");
+    let archive = tmp.path().join("app.asar");
+    build_source(&src);
+    fs::create_dir_all(src.join("bin/osx")).unwrap();
+    fs::write(src.join("bin/osx/steam.node"), b"native").unwrap();
+    fs::write(src.join("bin/osx/libsteam_api.dylib"), b"dylib").unwrap();
+
+    let options = PackOptions {
+        unpack: vec!["osx".to_string()],
+        ..PackOptions::default()
+    };
+    create_archive(&src, &archive, &options).unwrap();
+
+    let unpacked_dir = dc_asar::unpacked_dir_for(&archive);
+    assert!(unpacked_dir.join("bin/osx/steam.node").is_file());
+    assert!(unpacked_dir.join("bin/osx/libsteam_api.dylib").is_file());
+    assert!(
+        !unpacked_dir.join("bin/native.node").exists(),
+        "패턴에 맞지 않는 파일까지 unpacked 됐습니다"
+    );
+
+    let opened = AsarArchive::open(&archive).unwrap();
+    for rel in ["bin/osx/steam.node", "bin/osx/libsteam_api.dylib"] {
+        let entry = opened
+            .entries()
+            .into_iter()
+            .find(|e| e.path == rel)
+            .unwrap();
+        assert!(
+            matches!(entry.kind, EntryKind::File { unpacked: true, .. }),
+            "{rel}"
+        );
+    }
+    assert_eq!(opened.root().lookup("bin/osx").unwrap().unpacked, None);
 }
 
 #[test]

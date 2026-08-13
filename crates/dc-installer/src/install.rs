@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -74,7 +75,6 @@ pub enum TranslationSource {
 pub struct InstallConfig {
     pub asar_path: PathBuf,
     pub source: TranslationSource,
-    pub integrity: bool,
     pub keep_work_dir: bool,
 }
 
@@ -170,7 +170,13 @@ fn run_install(
     step(reporter, 3);
     let mut source_archive = AsarArchive::open(&paths.backup)?;
     source_archive.validate()?;
-    let original_entries = source_archive.entries().len();
+    let source_entries = source_archive.entries();
+    let original_entries = source_entries.len();
+    let preserve_unpacked: BTreeSet<String> = source_entries
+        .into_iter()
+        .filter(|entry| matches!(entry.kind, EntryKind::File { unpacked: true, .. }))
+        .map(|entry| entry.path)
+        .collect();
     let extract_stats = source_archive.extract_to(&paths.app)?;
     drop(source_archive);
     success(
@@ -180,6 +186,15 @@ fn run_install(
             extract_stats.files, extract_stats.directories
         ),
     );
+    if !preserve_unpacked.is_empty() {
+        info(
+            reporter,
+            format!(
+                "원본이 unpacked로 둔 파일 {}개를 그대로 유지합니다",
+                preserve_unpacked.len()
+            ),
+        );
+    }
 
     step(reporter, 4);
     let (copy_stats, copied) = apply_translation(&config.source, &paths.app, reporter)?;
@@ -195,15 +210,16 @@ fn run_install(
     step(reporter, 5);
     let options = PackOptions {
         unpack: vec!["*.node".to_string()],
-        integrity: config.integrity,
+        preserve_unpacked,
     };
     let pack_stats = create_archive(&paths.app, &paths.new_asar, &options)?;
     success(
         reporter,
         format!(
-            "생성 완료: {}MB, 파일 {}개",
+            "생성 완료: {}MB, 파일 {}개 (unpacked {}개)",
             fsutil::to_mb(pack_stats.archive_bytes),
-            pack_stats.files
+            pack_stats.files,
+            pack_stats.unpacked_files
         ),
     );
 
