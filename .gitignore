@@ -1,5 +1,9 @@
 # Rust
 target/
 
+# Release packaging
+dist/
+AppDir/
+
 # macOS
 .DS_Store

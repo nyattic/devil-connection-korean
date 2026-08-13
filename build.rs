@@ -5,6 +5,8 @@ use dc_asar::{ArchiveRoot, PackOptions, create_archive_from};
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    embed_windows_icon();
+
     if std::env::var_os("CARGO_FEATURE_EMBED_DATA").is_none() {
         return;
     }
@@ -45,3 +47,17 @@ fn main() {
         Err(e) => panic!("번역 데이터 아카이브 생성에 실패했습니다: {e}"),
     }
 }
+
+#[cfg(windows)]
+fn embed_windows_icon() {
+    println!("cargo:rerun-if-changed=assets/icon.ico");
+
+    let mut resource = winresource::WindowsResource::new();
+    resource.set_icon("assets/icon.ico");
+    if let Err(e) = resource.compile() {
+        panic!("Windows 아이콘 리소스를 삽입하지 못했습니다: {e}");
+    }
+}
+
+#[cfg(not(windows))]
+fn embed_windows_icon() {}
