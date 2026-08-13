@@ -123,7 +123,10 @@ pub fn create_work_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
 
 pub fn copy_durable(src: &Path, dst: &Path) -> Result<u64> {
     let bytes = fs::copy(src, dst).map_err(|e| InstallError::io(src, e))?;
-    let file = fs::File::open(dst).map_err(|e| InstallError::io(dst, e))?;
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .open(dst)
+        .map_err(|e| InstallError::io(dst, e))?;
     file.sync_all().map_err(|e| InstallError::io(dst, e))?;
     Ok(bytes)
 }
@@ -161,6 +164,20 @@ mod tests {
             fs::read_to_string(dst.join("a/new.txt")).unwrap(),
             "새 파일"
         );
+    }
+
+    #[test]
+    fn copy_durable_copies_and_survives_an_existing_target() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src.bin");
+        let dst = tmp.path().join("dst.bin");
+        fs::write(&src, b"payload").unwrap();
+        fs::write(&dst, b"stale").unwrap();
+
+        let bytes = copy_durable(&src, &dst).unwrap();
+
+        assert_eq!(bytes, 7);
+        assert_eq!(fs::read(&dst).unwrap(), b"payload");
     }
 
     #[test]
