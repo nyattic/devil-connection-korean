@@ -516,7 +516,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "dc-asar"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "hex",
  "serde",
@@ -528,7 +528,7 @@ dependencies = [
 
 [[package]]
 name = "dc-installer"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "devil-connection-korean"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "dc-asar",
  "dc-installer",

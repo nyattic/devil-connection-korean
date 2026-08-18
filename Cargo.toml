@@ -32,7 +32,7 @@ members = ["crates/dc-asar", "crates/dc-installer"]
 default-members = [".", "crates/dc-asar", "crates/dc-installer"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-All-Rights-Reserved"
