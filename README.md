@@ -1,5 +1,10 @@
 # 데빌 커넥션 비공식 한글 번역 패치
 
+[![Latest Release](https://img.shields.io/github/v/release/nyattic/devil-connection-korean?style=for-the-badge&logo=github&logoColor=white&labelColor=2a1620&color=8a3557)](https://github.com/nyattic/devil-connection-korean/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/nyattic/devil-connection-korean/total?style=for-the-badge&logo=github&logoColor=white&labelColor=2a1620&color=8a3557)](https://github.com/nyattic/devil-connection-korean/releases)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-8a3557?style=for-the-badge&labelColor=2a1620)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8a3557?style=for-the-badge&logo=rust&logoColor=white&labelColor=2a1620)
+
 본 한글 패치와 패치 프로그램은 **Nyabi**가 제작했습니다.
 
 ## 프로젝트 연혁
