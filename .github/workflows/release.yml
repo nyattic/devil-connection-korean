@@ -24,6 +24,8 @@ jobs:
             asset: DevilConnection-KR-${{ github.ref_name }}.exe
           - os: macos-latest
             asset: DevilConnection-KR-${{ github.ref_name }}.zip
+    env:
+      ASSET: ${{ matrix.asset }}
     steps:
       - uses: actions/checkout@v7
 
@@ -46,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/release/dc-patcher-gui.exe "dist/${{ matrix.asset }}"
+          cp target/release/dc-patcher-gui.exe "dist/$ASSET"
           ls -lh dist
 
       - name: Package application bundle
@@ -96,7 +98,7 @@ jobs:
           codesign --verify --strict "$app"
 
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "$app" "dist/${{ matrix.asset }}"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "dist/$ASSET"
           ls -lh dist
 
       - name: Package AppImage
@@ -136,8 +138,8 @@ jobs:
           chmod +x appimagetool
 
           mkdir -p dist
-          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool "$appdir" "dist/${{ matrix.asset }}"
-          chmod +x "dist/${{ matrix.asset }}"
+          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool "$appdir" "dist/$ASSET"
+          chmod +x "dist/$ASSET"
           ls -lh dist
 
       - uses: actions/upload-artifact@v7
