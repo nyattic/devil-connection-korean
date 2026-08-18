@@ -28,12 +28,13 @@
 
 1. GitHub 페이지 상단의 **[Releases](../../releases)** 탭으로 이동합니다.
 2. 최신 릴리즈에서 본인의 운영체제에 맞는 패치 프로그램을 다운로드합니다.
-   - Windows: `DevilConnection-Korean-Patcher.exe`
-   - macOS: `DevilConnection-Korean-Patcher.zip`
-   - Linux: `DevilConnection-Korean-Patcher.AppImage`
+   - Windows: `DevilConnection-KR-v0.1.1.exe`
+   - macOS: `DevilConnection-KR-v0.1.1.zip`
+   - Linux: `DevilConnection-KR-v0.1.1.AppImage`
+   - 파일 이름의 `v0.1.1` 부분은 릴리즈 버전에 따라 달라집니다.
 3. 다운로드한 프로그램을 실행하고 안내에 따라 진행합니다.
-   - macOS: 압축을 풀면 `DevilConnection-Korean-Patcher.app`이 나옵니다.
-   - Linux: 실행 권한을 부여해야 합니다: `chmod +x DevilConnection-Korean-Patcher.AppImage`
+   - macOS: 압축을 풀면 `DevilConnection-KR.app`이 나옵니다.
+   - Linux: 실행 권한을 부여해야 합니다: `chmod +x DevilConnection-KR-v0.1.1.AppImage`
 4. 게임을 실행하면 한글 번역이 적용됩니다!
 
 번역 데이터는 패치 프로그램 안에 들어 있습니다. 별도의 데이터 폴더를 함께 받거나 압축을 풀어 둘 필요가 없으며, 프로그램 파일 하나만 있으면 됩니다.

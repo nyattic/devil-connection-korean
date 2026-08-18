@@ -19,11 +19,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            asset: DevilConnection-Korean-Patcher.AppImage
+            asset: DevilConnection-KR-${{ github.ref_name }}.AppImage
           - os: windows-latest
-            asset: DevilConnection-Korean-Patcher.exe
+            asset: DevilConnection-KR-${{ github.ref_name }}.exe
           - os: macos-latest
-            asset: DevilConnection-Korean-Patcher.zip
+            asset: DevilConnection-KR-${{ github.ref_name }}.zip
     steps:
       - uses: actions/checkout@v7
 
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app_name="DevilConnection-Korean-Patcher"
+          app_name="DevilConnection-KR"
           version="${GITHUB_REF_NAME#v}"
 
           staging="$(mktemp -d)"
@@ -115,7 +115,7 @@ jobs:
           cat > "$appdir/dc-patcher-gui.desktop" <<'DESKTOP'
           [Desktop Entry]
           Type=Application
-          Name=DevilConnection-Korean-Patcher
+          Name=DevilConnection-KR
           Comment=Unofficial Korean translation patcher for Devil Connection
           Exec=dc-patcher-gui
           Icon=dc-patcher-gui
