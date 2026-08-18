@@ -66,6 +66,20 @@
 
 ---
 
+## 빌드
+
+번역 데이터는 별도 저장소 `devil-connection-data`에 있습니다. 이 저장소에는 패치 프로그램 소스만 들어 있습니다.
+
+```sh
+git clone https://github.com/nyattic/devil-connection-data.git ../devil-connection-data
+cargo build --release --features embed-data
+```
+
+`../devil-connection-data`를 자동으로 찾으며, 다른 위치에 두었다면 `DC_DATA_DIR`로 지정합니다.
+`embed-data` 없이 빌드하면 번역 데이터를 프로그램에서 직접 폴더로 지정하는 방식으로 동작합니다.
+
+---
+
 ## 라이선스
 
 ### 번역 프로젝트

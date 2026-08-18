@@ -37,7 +37,17 @@ jobs:
 
       - run: cargo clippy --all-targets --locked -- -D warnings
 
-      - run: cargo clippy --all-targets --locked --features embed-data -- -D warnings
+      - name: Check out translation data
+        uses: actions/checkout@v7
+        with:
+          repository: nyattic/devil-connection-data
+          ssh-key: ${{ secrets.DATA_DEPLOY_KEY }}
+          path: translation-data
+
+      - name: Lint with embedded translation data
+        env:
+          DC_DATA_DIR: ${{ github.workspace }}/translation-data
+        run: cargo clippy --all-targets --locked --features embed-data -- -D warnings
 
   test:
     name: Test on ${{ matrix.os }}

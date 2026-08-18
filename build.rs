@@ -11,14 +11,13 @@ fn main() {
         return;
     }
 
-    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let data = manifest.join("data");
-    let tyrano = manifest.join("tyrano");
+    println!("cargo:rerun-if-env-changed=DC_DATA_DIR");
+
+    let root = translation_root();
+    let data = root.join("data");
+    let tyrano = root.join("tyrano");
 
     for dir in [&data, &tyrano] {
-        if !dir.is_dir() {
-            panic!("번역 데이터 폴더가 없습니다: {}", dir.display());
-        }
         println!("cargo:rerun-if-changed={}", dir.display());
     }
 
@@ -46,6 +45,29 @@ fn main() {
         ),
         Err(e) => panic!("번역 데이터 아카이브 생성에 실패했습니다: {e}"),
     }
+}
+
+fn translation_root() -> PathBuf {
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let candidates = match std::env::var_os("DC_DATA_DIR") {
+        Some(dir) => vec![PathBuf::from(dir)],
+        None => vec![manifest.clone(), manifest.join("../devil-connection-data")],
+    };
+
+    for candidate in &candidates {
+        if candidate.join("data").is_dir() && candidate.join("tyrano").is_dir() {
+            return candidate.clone();
+        }
+    }
+
+    panic!(
+        "번역 데이터를 찾지 못했습니다. DC_DATA_DIR로 data/와 tyrano/가 있는 폴더를 지정해주세요. 확인한 위치: {}",
+        candidates
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 #[cfg(windows)]

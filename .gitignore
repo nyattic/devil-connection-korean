@@ -1,6 +1,10 @@
 # Rust
 target/
 
+# Translation data (nyattic/devil-connection-data)
+/data/
+/tyrano/
+
 # Release packaging
 dist/
 AppDir/
