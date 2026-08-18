@@ -32,7 +32,7 @@ pub enum InstallError {
     },
 
     #[error("ASAR 처리 오류: {0}")]
-    Asar(#[from] dc_asar::AsarError),
+    Asar(#[source] dc_asar::AsarError),
 
     #[error("설치 검증에 실패했습니다: {0}")]
     Verification(String),
@@ -51,9 +51,29 @@ pub enum InstallError {
 
     #[error("백업 파일이 없습니다: {0}")]
     BackupMissing(PathBuf),
+
+    #[error("설치를 취소했습니다. 게임 파일은 그대로입니다.")]
+    Cancelled,
+}
+
+impl From<dc_asar::AsarError> for InstallError {
+    fn from(error: dc_asar::AsarError) -> Self {
+        match error {
+            dc_asar::AsarError::Cancelled => InstallError::Cancelled,
+            other => InstallError::Asar(other),
+        }
+    }
 }
 
 impl InstallError {
+    pub fn leaves_game_intact(&self) -> bool {
+        !matches!(self, InstallError::RollbackFailed { .. })
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, InstallError::Cancelled)
+    }
+
     pub(crate) fn io(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
         InstallError::Io {
             path: path.into(),

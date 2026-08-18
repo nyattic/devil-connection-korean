@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{AsarError, Result};
 use crate::header::{self, Entry, EntryKind, Node};
+use crate::observer::{Ignore, Observer, Ticker};
 use crate::safepath;
 
 const COPY_CHUNK: usize = 1024 * 1024;
@@ -201,11 +202,20 @@ impl<R: Read + Seek> AsarArchive<R> {
     }
 
     pub fn extract_to(&mut self, dest: impl AsRef<Path>) -> Result<ExtractStats> {
+        self.extract_to_observed(dest, &Ignore)
+    }
+
+    pub fn extract_to_observed(
+        &mut self,
+        dest: impl AsRef<Path>,
+        observer: &dyn Observer,
+    ) -> Result<ExtractStats> {
         let dest = dest.as_ref();
         fs::create_dir_all(dest).map_err(|e| AsarError::io(dest, e))?;
 
         let entries = self.entries();
         let mut stats = ExtractStats::default();
+        let mut ticker = Ticker::new(observer, "파일 해제", entries.len() as u64);
 
         for entry in &entries {
             let out_path = safepath::join_checked(dest, &entry.path)?;
@@ -259,6 +269,8 @@ impl<R: Read + Seek> AsarArchive<R> {
                     stats.bytes += *size;
                 }
             }
+
+            ticker.tick()?;
         }
 
         Ok(stats)

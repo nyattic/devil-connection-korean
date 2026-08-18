@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{AsarError, Result};
 use crate::header::{self, INTEGRITY_BLOCK_SIZE, Integrity, Node};
+use crate::observer::{Ignore, Observer, Ticker};
 use crate::pattern;
 use crate::read::unpacked_dir_for;
 use crate::safepath;
@@ -77,6 +78,15 @@ pub fn create_archive_from(
     dest: impl AsRef<Path>,
     options: &PackOptions,
 ) -> Result<PackStats> {
+    create_archive_observed(roots, dest, options, &Ignore)
+}
+
+pub fn create_archive_observed(
+    roots: &[ArchiveRoot],
+    dest: impl AsRef<Path>,
+    options: &PackOptions,
+    observer: &dyn Observer,
+) -> Result<PackStats> {
     let dest = dest.as_ref();
 
     let mut entries = Vec::new();
@@ -99,6 +109,7 @@ pub fn create_archive_from(
     let mut packed: Vec<(String, PathBuf, u64)> = Vec::new();
     let mut unpacked_dirs: BTreeSet<String> = BTreeSet::new();
     let mut offset: u64 = 0;
+    let mut scan = Ticker::new(observer, "파일 검사", entries.len() as u64);
 
     for entry in &entries {
         match &entry.kind {
@@ -172,6 +183,8 @@ pub fn create_archive_from(
                 stats.bytes += *size;
             }
         }
+
+        scan.tick()?;
     }
 
     let header_bytes = header::serialize(&root)?;
@@ -186,6 +199,8 @@ pub fn create_archive_from(
         .map_err(|e| AsarError::io(dest, e))?;
 
     let mut buf = vec![0u8; COPY_CHUNK];
+    let mut write = Ticker::new(observer, "아카이브 쓰기", packed.len() as u64);
+
     for (rel_path, source, expected_size) in &packed {
         let mut input = File::open(source).map_err(|e| AsarError::io(source, e))?;
         let mut written = 0u64;
@@ -208,6 +223,8 @@ pub fn create_archive_from(
                 actual: written,
             });
         }
+
+        write.tick()?;
     }
 
     writer.flush().map_err(|e| AsarError::io(dest, e))?;

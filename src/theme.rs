@@ -14,16 +14,23 @@ pub const BORDER_STRONG: Color32 = Color32::from_rgb(0xd6, 0xd6, 0xde);
 pub const TRACK: Color32 = Color32::from_rgb(0xed, 0xed, 0xf1);
 
 pub const TEXT: Color32 = Color32::from_rgb(0x17, 0x17, 0x1c);
-pub const MUTED: Color32 = Color32::from_rgb(0x85, 0x85, 0x8f);
+pub const MUTED: Color32 = Color32::from_rgb(0x6b, 0x6b, 0x75);
 pub const FAINT: Color32 = Color32::from_rgb(0xa8, 0xa8, 0xb2);
 
 pub const ACCENT: Color32 = Color32::from_rgb(0x8a, 0x35, 0x57);
 pub const ACCENT_SOFT: Color32 = Color32::from_rgb(0xf7, 0xed, 0xf1);
 
-pub const SUCCESS: Color32 = Color32::from_rgb(0x0e, 0x8f, 0x72);
-pub const ERROR: Color32 = Color32::from_rgb(0xd1, 0x43, 0x43);
+pub const SUCCESS: Color32 = Color32::from_rgb(0x0a, 0x6b, 0x54);
+pub const SUCCESS_SOFT: Color32 = Color32::from_rgb(0xe8, 0xf3, 0xef);
+pub const WARNING: Color32 = Color32::from_rgb(0x84, 0x51, 0x14);
+pub const ERROR: Color32 = Color32::from_rgb(0xa8, 0x32, 0x32);
 
 pub const RADIUS: u8 = 8;
+
+pub const CAPTION: f32 = 11.0;
+pub const BODY: f32 = 13.0;
+pub const SUBHEAD: f32 = 15.0;
+pub const TITLE: f32 = 22.0;
 
 pub fn semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(SEMIBOLD.into()))
@@ -67,11 +74,11 @@ pub fn install_style(ctx: &egui::Context) {
 
     ctx.all_styles_mut(|style| {
         style.text_styles = [
-            (TextStyle::Heading, semibold(19.0)),
-            (TextStyle::Body, regular(13.0)),
-            (TextStyle::Button, regular(13.0)),
-            (TextStyle::Small, regular(11.5)),
-            (TextStyle::Monospace, regular(12.0)),
+            (TextStyle::Heading, semibold(SUBHEAD)),
+            (TextStyle::Body, regular(BODY)),
+            (TextStyle::Button, regular(BODY)),
+            (TextStyle::Small, regular(CAPTION)),
+            (TextStyle::Monospace, regular(BODY)),
         ]
         .into();
         style.spacing.item_spacing = egui::vec2(8.0, 8.0);

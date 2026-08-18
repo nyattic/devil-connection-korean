@@ -40,6 +40,9 @@ pub enum AsarError {
 
     #[error("지원하지 않는 항목 유형입니다: {0}")]
     UnsupportedEntry(String),
+
+    #[error("사용자가 작업을 취소했습니다.")]
+    Cancelled,
 }
 
 impl AsarError {

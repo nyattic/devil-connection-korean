@@ -3,8 +3,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use dc_installer::{
-    Event, InstallConfig, Level, Reporter, TranslationSource, detect_game_dirs, game, install,
-    locate_asar, restore,
+    Cancel, Event, InstallConfig, Level, Reporter, TranslationSource, detect_game_dirs, game,
+    install, locate_asar, restore,
 };
 
 #[derive(Parser)]
@@ -171,6 +171,7 @@ fn run(cli: Cli) -> std::result::Result<(), Box<dyn std::error::Error>> {
                     asar_path: asar,
                     source: TranslationSource::Directory(data_dir),
                     keep_work_dir,
+                    cancel: Cancel::new(),
                 },
                 &ConsoleReporter,
             )?;

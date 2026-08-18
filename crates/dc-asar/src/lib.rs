@@ -1,5 +1,6 @@
 mod error;
 mod header;
+mod observer;
 mod pattern;
 mod read;
 mod safepath;
@@ -7,8 +8,12 @@ mod write;
 
 pub use error::{AsarError, Result};
 pub use header::{Entry, EntryKind, INTEGRITY_BLOCK_SIZE, Integrity, Node, flatten};
+pub use observer::{Ignore, Observer};
 pub use read::{AsarArchive, ExtractStats, unpacked_dir_for};
-pub use write::{ArchiveRoot, PackOptions, PackStats, create_archive, create_archive_from};
+pub use write::{
+    ArchiveRoot, PackOptions, PackStats, create_archive, create_archive_from,
+    create_archive_observed,
+};
 
 pub fn looks_like_asar(bytes: &[u8]) -> bool {
     if bytes.len() < 16 {

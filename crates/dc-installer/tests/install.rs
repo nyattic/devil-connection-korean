@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 
 use dc_asar::{ArchiveRoot, AsarArchive, PackOptions, create_archive, create_archive_from};
 use dc_installer::{
-    InstallConfig, InstallError, PATCH_DIRS, SilentReporter, TranslationSource, install, restore,
+    Cancel, InstallConfig, InstallError, PATCH_DIRS, SilentReporter, TranslationSource, install,
+    restore,
 };
 
 struct Fixture {
@@ -79,6 +80,7 @@ impl Fixture {
             asar_path: self.asar.clone(),
             source: TranslationSource::Directory(self.data_dir.clone()),
             keep_work_dir: false,
+            cancel: Cancel::new(),
         }
     }
 
@@ -109,6 +111,7 @@ impl Fixture {
             asar_path: self.asar.clone(),
             source: TranslationSource::Embedded(bytes),
             keep_work_dir: false,
+            cancel: Cancel::new(),
         }
     }
 
@@ -126,6 +129,24 @@ impl Fixture {
             .read_file(rel)
             .unwrap()
     }
+}
+
+#[test]
+fn cancelling_stops_the_install_and_leaves_the_game_untouched() {
+    let fx = Fixture::new();
+    let cancel = Cancel::new();
+    cancel.cancel();
+
+    let config = InstallConfig {
+        cancel,
+        ..fx.config()
+    };
+    let error = install(&config, &SilentReporter).unwrap_err();
+
+    assert!(matches!(error, InstallError::Cancelled));
+    assert!(error.leaves_game_intact());
+    assert_eq!(fs::read(&fx.asar).unwrap(), fx.pristine);
+    assert_no_work_dirs(&fx.resources());
 }
 
 fn write_file(path: &Path, contents: &[u8]) {

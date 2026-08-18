@@ -2,9 +2,12 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dc_asar::{AsarArchive, EntryKind, PackOptions, create_archive, unpacked_dir_for};
+use dc_asar::{
+    ArchiveRoot, AsarArchive, EntryKind, PackOptions, create_archive_observed, unpacked_dir_for,
+};
 use sha2::{Digest, Sha256};
 
+use crate::cancel::Cancel;
 use crate::error::{InstallError, Result};
 use crate::fsutil::{self, CopyStats};
 use crate::progress::{Event, Reporter, info, success, warn};
@@ -28,40 +31,49 @@ const WORK_DIR_PREFIX: &str = ".dcpatch-work-";
 pub struct StepInfo {
     pub label: &'static str,
     pub detail: &'static str,
+    pub weight: u32,
 }
 
 pub const STEPS: &[StepInfo] = &[
     StepInfo {
         label: "준비 확인",
         detail: "설치 준비 상태를 확인합니다",
+        weight: 1,
     },
     StepInfo {
         label: "원본 백업",
         detail: "원본 파일을 백업합니다",
+        weight: 4,
     },
     StepInfo {
         label: "원본 해제",
         detail: "원본 app.asar을 해제합니다 (시간이 걸릴 수 있습니다)",
+        weight: 10,
     },
     StepInfo {
         label: "번역 적용",
         detail: "번역 데이터를 덮어씁니다",
+        weight: 4,
     },
     StepInfo {
         label: "재압축",
         detail: "app.asar을 다시 만듭니다 (시간이 걸릴 수 있습니다)",
+        weight: 12,
     },
     StepInfo {
         label: "검증",
         detail: "생성한 아카이브를 검증합니다",
+        weight: 4,
     },
     StepInfo {
         label: "교체",
         detail: "게임 파일을 교체합니다",
+        weight: 2,
     },
     StepInfo {
         label: "정리",
         detail: "임시 파일을 정리합니다",
+        weight: 1,
     },
 ];
 
@@ -76,6 +88,7 @@ pub struct InstallConfig {
     pub asar_path: PathBuf,
     pub source: TranslationSource,
     pub keep_work_dir: bool,
+    pub cancel: Cancel,
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +142,29 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     path.with_file_name(name)
 }
 
+pub fn backup_path(asar_path: &Path) -> PathBuf {
+    with_suffix(asar_path, ".backup")
+}
+
+struct StepObserver<'a> {
+    reporter: &'a dyn Reporter,
+    cancel: &'a Cancel,
+}
+
+impl dc_asar::Observer for StepObserver<'_> {
+    fn advance(&self, task: &str, done: u64, total: u64) {
+        self.reporter.report(Event::Progress {
+            label: task.to_string(),
+            done,
+            total,
+        });
+    }
+
+    fn cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+}
+
 fn step(reporter: &dyn Reporter, index: u32) {
     reporter.report(Event::Step {
         index,
@@ -164,9 +200,16 @@ fn run_install(
     preflight: &Preflight,
     reporter: &dyn Reporter,
 ) -> Result<InstallReport> {
+    let observer = StepObserver {
+        reporter,
+        cancel: &config.cancel,
+    };
+
+    config.cancel.check()?;
     step(reporter, 2);
     ensure_backup(paths, reporter)?;
 
+    config.cancel.check()?;
     step(reporter, 3);
     let mut source_archive = AsarArchive::open(&paths.backup)?;
     source_archive.validate()?;
@@ -177,7 +220,7 @@ fn run_install(
         .filter(|entry| matches!(entry.kind, EntryKind::File { unpacked: true, .. }))
         .map(|entry| entry.path)
         .collect();
-    let extract_stats = source_archive.extract_to(&paths.app)?;
+    let extract_stats = source_archive.extract_to_observed(&paths.app, &observer)?;
     drop(source_archive);
     success(
         reporter,
@@ -196,8 +239,15 @@ fn run_install(
         );
     }
 
+    config.cancel.check()?;
     step(reporter, 4);
-    let (copy_stats, copied) = apply_translation(&config.source, &paths.app, reporter)?;
+    let (copy_stats, copied) = apply_translation(
+        &config.source,
+        &paths.app,
+        reporter,
+        &config.cancel,
+        &observer,
+    )?;
     success(
         reporter,
         format!(
@@ -207,12 +257,17 @@ fn run_install(
         ),
     );
 
+    config.cancel.check()?;
     step(reporter, 5);
     let options = PackOptions {
         unpack: vec!["*.node".to_string()],
         preserve_unpacked,
     };
-    let pack_stats = create_archive(&paths.app, &paths.new_asar, &options)?;
+    let roots = [ArchiveRoot {
+        archive_path: "",
+        source: &paths.app,
+    }];
+    let pack_stats = create_archive_observed(&roots, &paths.new_asar, &options, &observer)?;
     success(
         reporter,
         format!(
@@ -223,9 +278,17 @@ fn run_install(
         ),
     );
 
+    config.cancel.check()?;
     step(reporter, 6);
-    let verified = verify(&paths.new_asar, &copied, original_entries, reporter)?;
+    let verified = verify(
+        &paths.new_asar,
+        &copied,
+        original_entries,
+        reporter,
+        &config.cancel,
+    )?;
 
+    config.cancel.check()?;
     step(reporter, 7);
     if let Err(cause) = commit(paths) {
         warn(reporter, "교체에 실패했습니다. 원본을 복구합니다.");
@@ -284,7 +347,7 @@ fn preflight(config: &InstallConfig, reporter: &dyn Reporter) -> Result<Prefligh
         .map_err(|e| InstallError::io(asar, e))?
         .len();
 
-    let backup_exists = with_suffix(asar, ".backup").is_file();
+    let backup_exists = backup_path(asar).is_file();
     let required = archive_size * if backup_exists { 2 } else { 3 } + data_size * 2 + SPACE_MARGIN;
     let available = fsutil::available_space(&resources)?;
     if available < required {
@@ -404,10 +467,14 @@ fn apply_translation(
     source: &TranslationSource,
     app_dir: &Path,
     reporter: &dyn Reporter,
+    cancel: &Cancel,
+    observer: &StepObserver,
 ) -> Result<(CopyStats, Vec<CopiedFile>)> {
     match source {
-        TranslationSource::Directory(dir) => apply_from_dir(dir, app_dir, reporter),
-        TranslationSource::Embedded(bytes) => apply_from_archive(bytes, app_dir, reporter),
+        TranslationSource::Directory(dir) => apply_from_dir(dir, app_dir, reporter, cancel),
+        TranslationSource::Embedded(bytes) => {
+            apply_from_archive(bytes, app_dir, reporter, cancel, observer)
+        }
     }
 }
 
@@ -415,10 +482,12 @@ fn apply_from_archive(
     bytes: &[u8],
     app_dir: &Path,
     reporter: &dyn Reporter,
+    cancel: &Cancel,
+    observer: &StepObserver,
 ) -> Result<(CopyStats, Vec<CopiedFile>)> {
     let mut archive = AsarArchive::from_bytes(bytes)?;
     archive.validate()?;
-    let extracted = archive.extract_to(app_dir)?;
+    let extracted = archive.extract_to_observed(app_dir, observer)?;
 
     let paths: Vec<String> = archive
         .entries()
@@ -430,6 +499,7 @@ fn apply_from_archive(
     let total = paths.len() as u64;
     let mut copied = Vec::with_capacity(paths.len());
     for (index, archive_path) in paths.into_iter().enumerate() {
+        cancel.check()?;
         let expected = archive.hash_file(&archive_path)?;
         copied.push(CopiedFile {
             archive_path,
@@ -456,11 +526,13 @@ fn apply_from_dir(
     data_dir: &Path,
     app_dir: &Path,
     reporter: &dyn Reporter,
+    cancel: &Cancel,
 ) -> Result<(CopyStats, Vec<CopiedFile>)> {
     let mut stats = CopyStats::default();
     let mut copied = Vec::new();
 
     for (index, dir) in PATCH_DIRS.iter().enumerate() {
+        cancel.check()?;
         let src = data_dir.join(dir);
         let dst = app_dir.join(dir);
 
@@ -507,6 +579,7 @@ fn verify(
     copied: &[CopiedFile],
     original_entries: usize,
     reporter: &dyn Reporter,
+    cancel: &Cancel,
 ) -> Result<u64> {
     let mut archive = AsarArchive::open(new_asar)?;
     archive.validate()?;
@@ -520,6 +593,7 @@ fn verify(
 
     let total = copied.len() as u64;
     for (index, file) in copied.iter().enumerate() {
+        cancel.check()?;
         let actual = archive.hash_file(&file.archive_path).map_err(|e| {
             InstallError::Verification(format!("'{}' 확인 실패: {e}", file.archive_path))
         })?;
@@ -590,7 +664,7 @@ fn rollback(paths: &Paths) -> Result<()> {
 }
 
 pub fn restore(asar_path: &Path, reporter: &dyn Reporter) -> Result<()> {
-    let backup = with_suffix(asar_path, ".backup");
+    let backup = backup_path(asar_path);
     if !backup.is_file() {
         return Err(InstallError::BackupMissing(backup));
     }
